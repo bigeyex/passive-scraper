@@ -14,18 +14,171 @@ document.addEventListener('DOMContentLoaded', async () => {
     const planContainer = document.getElementById('plan-container');
     const tablesNavContainer = document.getElementById('tables-nav-container');
     const tablesContainer = document.getElementById('tables-container');
-    const navItems = document.querySelectorAll('.nav-item');
+    const logSidebar = document.getElementById('log-sidebar');
+    const logContainer = document.getElementById('log-container');
+    const logToggleBtn = document.getElementById('log-toggle-btn');
+    const clearLogBtn = document.getElementById('clear-log-btn');
+
+
 
     // Load initial state
-    const stored = await chrome.storage.local.get(['plans', 'isListening']);
+    const stored = await chrome.storage.local.get(['plans', 'isListening', 'isLogOpen']);
     if (stored.plans) state.plans = stored.plans;
     if (stored.isListening) state.isListening = stored.isListening;
+    if (stored.isLogOpen) {
+        logSidebar.classList.add('open');
+    }
 
     renderUI();
+
+    // Network Listener
+    chrome.devtools.network.onRequestFinished.addListener(async (request) => {
+        if (!state.isListening) return;
+
+        const url = request.request.url;
+
+        for (const plan of state.plans) {
+            if (url.includes(plan.urlFilter)) {
+                addLog('info', `Captured request matching filter: ${plan.urlFilter}`);
+                // Get content
+                request.getContent((content, encoding) => {
+                    if (content) {
+                        processResponse(content, plan);
+                    } else {
+                        addLog('error', `No content for ${url}`);
+                    }
+                });
+            }
+        }
+    });
+
+    function addLog(type, message) {
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        const time = new Date().toLocaleTimeString();
+        entry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+        logContainer.prepend(entry); // Newest first
+    }
+
+
+
+    async function processResponse(responseBody, plan) {
+        let parsedBody = null;
+        try {
+            parsedBody = JSON.parse(responseBody);
+        } catch (e) {
+            addLog('error', `Failed to parse JSON for table ${plan.tableName}`);
+            return;
+        }
+
+        let itemsToProcess = [];
+
+        if (plan.extractionType === 'json') {
+            // Handle Root Path
+            if (plan.rootPath) {
+                try {
+                    const root = plan.rootPath.split(/[.\[\]]+/).filter(Boolean).reduce((obj, key) => obj && obj[key], parsedBody);
+                    if (Array.isArray(root)) {
+                        itemsToProcess = root;
+                        addLog('success', `Found list at root path: ${plan.rootPath} (${root.length} items)`);
+                    } else if (root) {
+                        itemsToProcess = [root];
+                        addLog('success', `Found single item at root path: ${plan.rootPath}`);
+                    } else {
+                        addLog('warning', `Root path not found: ${plan.rootPath}`);
+                    }
+                } catch (e) {
+                    addLog('error', `Error traversing root path: ${plan.rootPath}`);
+                }
+            } else {
+                // If no root path, assume the body itself is the item or array
+                if (Array.isArray(parsedBody)) {
+                    itemsToProcess = parsedBody;
+                    addLog('success', `Using root array (${itemsToProcess.length} items)`);
+                } else {
+                    itemsToProcess = [parsedBody];
+                    addLog('success', `Using root object`);
+                }
+            }
+        } else {
+            itemsToProcess = [responseBody];
+        }
+
+        let savedCount = 0;
+        const tableKey = `data_${plan.tableName}`;
+        const result = await chrome.storage.local.get(tableKey);
+        const currentData = result[tableKey] || [];
+        itemsToProcess.forEach(item => {
+            const row = {};
+            let hasData = false;
+            plan.columns.forEach(col => {
+                if (plan.extractionType === 'json') {
+                    try {
+                        if (col.path === '.' || col.path === '') {
+                            row[col.name] = typeof item === 'object' ? JSON.stringify(item) : item;
+                            hasData = true;
+                        } else {
+                            const value = col.path.split(/[.\[\]]+/).filter(Boolean).reduce((obj, key) => obj && obj[key], item);
+                            if (value !== undefined) {
+                                row[col.name] = value;
+                                hasData = true;
+                            } else {
+                                row[col.name] = '';
+                                // Only log missing columns if it's a single item or first few of a list to avoid spam
+                                // addLog('warning', `Column ${col.name} (path: ${col.path}) not found`);
+                            }
+                        }
+                    } catch (e) {
+                        row[col.name] = '';
+                    }
+                } else {
+                    // Regex
+                    try {
+                        const regex = new RegExp(col.path);
+                        const match = item.match(regex);
+                        if (match) {
+                            row[col.name] = match[1] || match[0];
+                            hasData = true;
+                        } else {
+                            row[col.name] = '';
+                        }
+                    } catch (e) {
+                        row[col.name] = '';
+                    }
+                }
+            });
+
+            if (hasData) {
+                currentData.push(row);
+                savedCount++;
+            }
+        });
+
+        if (savedCount > 0) {
+            // If currently viewing this table, refresh it
+            if (state.activeTab === `table-${plan.tableName}`) {
+                renderTable(plan.tableName);
+            }
+            await chrome.storage.local.set({ [tableKey]: currentData });
+            addLog('success', `Saved ${savedCount} rows to table ${plan.tableName}`);
+        } else {
+            addLog('warning', `No data extracted for table ${plan.tableName}`);
+        }
+    }
+
 
     // Event Listeners
     playBtn.addEventListener('click', toggleListening);
     addRequestBtn.addEventListener('click', addRequestBlock);
+
+    logToggleBtn.addEventListener('click', () => {
+        logSidebar.classList.toggle('open');
+        chrome.storage.local.set({ isLogOpen: logSidebar.classList.contains('open') });
+    });
+
+    clearLogBtn.addEventListener('click', () => {
+        logContainer.innerHTML = '';
+    });
 
     // Navigation
     document.querySelector('.nav-menu').addEventListener('click', (e) => {
@@ -50,7 +203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (tabName === 'plan') {
             document.getElementById('plan-tab').classList.add('active');
         } else if (tabName.startsWith('table-')) {
-            // Show specific table
             const tableName = tabName.replace('table-', '');
             renderTable(tableName);
         }
@@ -60,12 +212,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.isListening = !state.isListening;
         chrome.storage.local.set({ isListening: state.isListening });
         updatePlayButton();
-
-        // Notify background script
-        chrome.runtime.sendMessage({
-            type: 'TOGGLE_LISTENING',
-            isListening: state.isListening
-        });
     }
 
     function updatePlayButton() {
@@ -85,7 +231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             id: Date.now().toString(),
             tableName: 'New Table',
             urlFilter: '',
-            extractionType: 'json', // 'json' or 'regex'
+            extractionType: 'json',
+            rootPath: '', // New field
             columns: []
         };
         state.plans.push(block);
@@ -143,6 +290,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <option value="regex" ${block.extractionType === 'regex' ? 'selected' : ''}>Regex</option>
                 </select>
             </div>
+            <div class="form-group root-path-group" style="${block.extractionType === 'json' ? '' : 'display:none;'}">
+                <label>JSON Path to List (Root)</label>
+                <input type="text" class="root-path-input" value="${block.rootPath || ''}" placeholder="e.g. data.items">
+            </div>
             <div class="columns-section">
                 <label>Columns</label>
                 <div class="columns-list"></div>
@@ -150,7 +301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
-        // Event Listeners for inputs
+        // Event Listeners
         const tableNameInput = el.querySelector('.table-name-input');
         tableNameInput.addEventListener('input', (e) => {
             block.tableName = e.target.value;
@@ -165,9 +316,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         el.querySelector('.extraction-type-select').addEventListener('change', (e) => {
             block.extractionType = e.target.value;
+            // Toggle Root Path input visibility
+            const rootPathGroup = el.querySelector('.root-path-group');
+            rootPathGroup.style.display = block.extractionType === 'json' ? 'block' : 'none';
+
             savePlans();
-            renderColumns(el, block); // Re-render columns to update placeholders
+            renderColumns(el, block);
         });
+
+        el.querySelector('.root-path-input').addEventListener('input', (e) => {
+            block.rootPath = e.target.value;
+            savePlans();
+        });
+
+
 
         el.querySelector('.delete-block-btn').addEventListener('click', () => {
             state.plans = state.plans.filter(p => p.id !== block.id);
@@ -194,7 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('div');
             row.className = 'column-row';
 
-            const placeholder = block.extractionType === 'json' ? 'JSON Path (e.g. data.items[0].id)' : 'Regex Group (e.g. "id":(\\d+))';
+            const placeholder = block.extractionType === 'json' ? 'Path (relative to item)' : 'Regex Group';
 
             row.innerHTML = `
                 <input type="text" class="col-name" placeholder="Column Name" value="${col.name}">
@@ -212,6 +374,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 savePlans();
             });
 
+
+
             row.querySelector('.remove-col-btn').addEventListener('click', () => {
                 block.columns.splice(index, 1);
                 savePlans();
@@ -223,12 +387,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function renderTable(tableName) {
-        // Clear previous table
         tablesContainer.innerHTML = '';
 
-        // Create container
         const container = document.createElement('div');
-        container.className = 'tab-content active'; // Make it visible
+        container.className = 'tab-content active';
         container.innerHTML = `
             <div class="header">
                 <h2>${tableName}</h2>
@@ -242,12 +404,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
-        // Get data
         const storageKey = `data_${tableName}`;
         const result = await chrome.storage.local.get(storageKey);
         const data = result[storageKey] || [];
 
-        // Get columns definition from plan
         const plan = state.plans.find(p => p.tableName === tableName);
         if (!plan) {
             container.innerHTML += '<p>No plan found for this table.</p>';
@@ -255,7 +415,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Render Headers
         const headerRow = container.querySelector('.header-row');
         plan.columns.forEach(col => {
             const th = document.createElement('th');
@@ -263,7 +422,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             headerRow.appendChild(th);
         });
 
-        // Render Rows
         const tbody = container.querySelector('.data-body');
         data.forEach(row => {
             const tr = document.createElement('tr');
@@ -275,7 +433,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             tbody.appendChild(tr);
         });
 
-        // Clear Data Button
         container.querySelector('.clear-table-btn').addEventListener('click', async () => {
             await chrome.storage.local.remove(storageKey);
             renderTable(tableName);
@@ -283,4 +440,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         tablesContainer.appendChild(container);
     }
+
+
 });
