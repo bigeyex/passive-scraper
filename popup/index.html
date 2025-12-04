@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passive Scraper</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="control-panel">
+                <button id="play-btn" class="icon-btn" title="Start/Stop Listening">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path id="play-icon" d="M8 5v14l11-7z"/>
+                        <path id="stop-icon" d="M6 6h12v12H6z" style="display: none;"/>
+                    </svg>
+                </button>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="plan">Plan</button>
+                <div class="nav-divider">Tables</div>
+                <div id="tables-nav-container">
+                    <!-- Table tabs will be added here dynamically -->
+                </div>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div id="plan-tab" class="tab-content active">
+                <div class="header">
+                    <h2>Scraping Plan</h2>
+                    <button id="add-request-btn" class="primary-btn">+ Add Request</button>
+                </div>
+                <div id="plan-container">
+                    <!-- Request blocks will be added here -->
+                </div>
+            </div>
+            <div id="tables-container">
+                <!-- Table views will be added here dynamically -->
+            </div>
+        </main>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
