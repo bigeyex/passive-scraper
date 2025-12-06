@@ -328,7 +328,7 @@ select:focus {
 
 #log-toggle-btn {
     position: absolute;
-    top: 10px;
+    bottom: 10px;
     right: 10px;
     z-index: 100;
     background-color: var(--sidebar-bg);
