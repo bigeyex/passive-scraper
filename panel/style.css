@@ -334,3 +334,224 @@ select:focus {
     background-color: var(--sidebar-bg);
     border: 1px solid var(--border-color);
 }
+/* Action Block */
+.action-block {
+    background-color: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    border-left: 3px solid #e91e63; /* Pink accent for actions */
+}
+
+.action-list {
+    margin-top: 10px;
+    min-height: 50px; /* Drop target area */
+}
+
+.action-item {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+}
+
+.action-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.action-handle {
+    cursor: grab;
+    color: #666;
+    font-size: 16px;
+    user-select: none;
+}
+
+.action-handle:active {
+    cursor: grabbing;
+}
+
+.action-type-select {
+    width: auto;
+    flex: 1;
+}
+
+.selector-group {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    flex: 1;
+}
+
+.crosshair-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.crosshair-btn:hover {
+    background-color: var(--hover-bg);
+    color: var(--accent-color);
+}
+
+.global-switch-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: #666; /* Gray when local */
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.global-switch-btn.active {
+    color: var(--accent-color); /* Blue when global */
+    border-color: var(--accent-color);
+}
+
+.nested-actions-container {
+    margin-left: 20px;
+    padding-left: 10px;
+    border-left: 1px dashed var(--border-color);
+    margin-top: 5px;
+}
+
+.add-action-btn {
+    background: none;
+    border: 1px dashed var(--border-color);
+    color: #888;
+    width: 100%;
+    padding: 8px;
+    cursor: pointer;
+    margin-top: 5px;
+    font-size: 13px;
+}
+
+.add-action-btn:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.save-config-row {
+    display: flex;
+    gap: 8px;
+}
+
+.save-config-row input {
+    flex: 1;
+}
+
+/* Dragging styles */
+.action-item.dragging {
+    opacity: 0.5;
+    border: 1px dashed var(--accent-color);
+}
+
+.action-list.drag-over {
+    background-color: rgba(0, 122, 204, 0.1);
+}
+
+/* Compact UI & Refinements */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.action-block .block-header {
+    justify-content: flex-end; /* Align Run button to right */
+}
+
+.run-actions-btn {
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.run-actions-btn:hover {
+    opacity: 0.9;
+}
+
+.compact-input {
+    width: auto !important;
+    display: inline-block !important;
+    min-width: 100px;
+}
+
+.save-columns-list {
+    margin-left: 20px;
+    margin-top: 5px;
+}
+
+.save-column-item {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+    align-items: center;
+}
+
+.add-save-col-btn {
+    font-size: 11px;
+    color: var(--accent-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    margin-left: 20px;
+}
+
+.add-save-col-btn:hover {
+    text-decoration: underline;
+}
+
+/* Updated Action Item Styles */
+.action-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.inline-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.delete-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #ccc; /* Light gray */
+    font-size: 14px;
+    padding: 0 5px;
+}
+
+.delete-action-btn:hover {
+    color: #999;
+}
+
+.nested-actions-container {
+    margin-left: 20px;
+    border-left: 2px solid #eee;
+    padding-left: 10px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}

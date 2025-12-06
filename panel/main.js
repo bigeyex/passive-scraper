@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playIcon = document.getElementById('play-icon');
     const stopIcon = document.getElementById('stop-icon');
     const addRequestBtn = document.getElementById('add-request-btn');
+    const addActionsBtn = document.getElementById('add-actions-btn');
     const planContainer = document.getElementById('plan-container');
     const tablesNavContainer = document.getElementById('tables-nav-container');
     const tablesContainer = document.getElementById('tables-container');
@@ -52,6 +53,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+
+    // Listen for picker messages
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'element_picked') {
+            if (activePickerInput) {
+                activePickerInput.value = request.selector;
+                // Trigger input event to save
+                activePickerInput.dispatchEvent(new Event('input'));
+                activePickerInput = null;
+            }
+        }
+    });
+
+    // Listen for data extraction and logs from execution script
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'data_extracted') {
+            saveExtractedData(request.tableName, request.data);
+        } else if (request.type === 'log') {
+            addLog(request.level, request.message);
+        }
+    });
+
+    let activePickerInput = null;
+
+    function startPicker(inputElement) {
+        activePickerInput = inputElement;
+        // Inject content script if not already there (or just send message)
+        // Since we can't easily check if it's injected without activeTab execution,
+        // we'll try to execute script then send message.
+
+        // Get inspected window tab ID
+        const tabId = chrome.devtools.inspectedWindow.tabId;
+
+        chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['content_script.js']
+        }, () => {
+            if (chrome.runtime.lastError) {
+                // Ignore error if script already injected or other issue, try sending message anyway
+                // console.error(chrome.runtime.lastError);
+            }
+
+            // Send message to tab
+            chrome.tabs.sendMessage(tabId, { type: 'start_picking' });
+        });
+    }
     function addLog(type, message) {
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
@@ -166,10 +213,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    async function saveExtractedData(tableName, row) {
+        const tableKey = `data_${tableName}`;
+        const result = await chrome.storage.local.get(tableKey);
+        const currentData = result[tableKey] || [];
+
+        currentData.push(row);
+
+        await chrome.storage.local.set({ [tableKey]: currentData });
+
+        // If currently viewing this table, refresh it
+        if (state.activeTab === `table-${tableName}`) {
+            renderTable(tableName);
+        }
+
+        addLog('success', `Saved row to table ${tableName}`);
+    }
+
 
     // Event Listeners
     playBtn.addEventListener('click', toggleListening);
     addRequestBtn.addEventListener('click', addRequestBlock);
+    if (addActionsBtn) addActionsBtn.addEventListener('click', addActionBlock);
 
     logToggleBtn.addEventListener('click', () => {
         logSidebar.classList.toggle('open');
@@ -228,6 +293,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function addRequestBlock() {
         const block = {
+            type: 'request', // Explicit type
             id: Date.now().toString(),
             tableName: 'New Table',
             urlFilter: '',
@@ -248,7 +314,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderUI() {
         updatePlayButton();
         planContainer.innerHTML = '';
-        state.plans.forEach(renderRequestBlock);
+        state.plans.forEach(block => {
+            if (block.type === 'actions') {
+                renderActionBlock(block);
+            } else {
+                renderRequestBlock(block);
+            }
+        });
         renderSidebarTables();
     }
 
@@ -485,5 +557,344 @@ document.addEventListener('DOMContentLoaded', async () => {
         addLog('success', `Exported ${tableName}.csv`);
     }
 
+
+    // --- Action Block Logic ---
+
+    let draggingAction = null;
+    let draggingSourceList = null;
+
+    function addActionBlock() {
+        const block = {
+            id: Date.now().toString(),
+            type: 'actions',
+            type: 'actions',
+            // name: 'New Actions', // Removed name
+            actions: []
+        };
+        state.plans.push(block);
+        savePlans();
+        renderActionBlock(block);
+    }
+
+    function renderActionBlock(block) {
+        const el = document.createElement('div');
+        el.className = 'action-block';
+        el.dataset.id = block.id;
+
+        el.innerHTML = `
+            <div class="block-header">
+                <div style="flex: 1;"></div>
+                <button class="run-actions-btn" title="Run Actions">▶ Run</button>
+                <button class="delete-block-btn" title="Delete Block" style="margin-left: 10px;">✕</button>
+            </div>
+            <div class="action-list"></div>
+            <button class="add-action-btn">+ Add Action</button>
+        `;
+
+        // Listeners
+        el.querySelector('.run-actions-btn').addEventListener('click', () => {
+            const tabId = chrome.devtools.inspectedWindow.tabId;
+
+            // Inject execution script
+            chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['execution_script.js']
+            }, () => {
+                if (chrome.runtime.lastError) {
+                    addLog('error', 'Failed to inject execution script: ' + chrome.runtime.lastError.message);
+                    return;
+                }
+
+                // Send actions to script
+                chrome.tabs.sendMessage(tabId, {
+                    type: 'execute_actions',
+                    actions: block.actions
+                });
+                addLog('info', 'Started executing actions...');
+            });
+        });
+
+        el.querySelector('.delete-block-btn').addEventListener('click', () => {
+            state.plans = state.plans.filter(p => p.id !== block.id);
+            savePlans();
+            el.remove();
+        });
+
+        el.querySelector('.add-action-btn').addEventListener('click', () => {
+            block.actions.push({
+                id: Date.now().toString(),
+                type: 'click',
+                selector: ''
+            });
+            savePlans();
+            renderActionsList(el.querySelector('.action-list'), block.actions, block);
+        });
+
+        renderActionsList(el.querySelector('.action-list'), block.actions, block);
+        planContainer.appendChild(el);
+    }
+
+    function renderActionsList(container, actions, block) {
+        container.innerHTML = '';
+
+        // Drag listeners on container
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            container.classList.add('drag-over');
+            const afterElement = getDragAfterElement(container, e.clientY);
+            const dragging = document.querySelector('.dragging');
+            if (dragging) {
+                if (afterElement == null) {
+                    container.appendChild(dragging);
+                } else {
+                    container.insertBefore(dragging, afterElement);
+                }
+            }
+        });
+
+        container.addEventListener('dragleave', () => {
+            container.classList.remove('drag-over');
+        });
+
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            container.classList.remove('drag-over');
+
+            if (!draggingAction || !draggingSourceList) return;
+
+            // Remove from source
+            const sourceIndex = draggingSourceList.indexOf(draggingAction);
+            if (sourceIndex > -1) {
+                draggingSourceList.splice(sourceIndex, 1);
+            }
+
+            // Find new index
+            const draggingEl = document.querySelector('.dragging');
+            // We need to find where draggingEl is in the container children to determine index
+            const newIndex = [...container.children].indexOf(draggingEl);
+
+            if (newIndex > -1) {
+                actions.splice(newIndex, 0, draggingAction);
+            } else {
+                actions.push(draggingAction);
+            }
+
+            draggingAction = null;
+            draggingSourceList = null;
+            savePlans();
+
+            renderUI();
+        });
+
+        actions.forEach((action, index) => {
+            const item = renderActionItem(action, index, actions, block);
+            container.appendChild(item);
+        });
+    }
+
+    function renderActionItem(action, index, actions, block) {
+        const el = document.createElement('div');
+        el.className = 'action-item';
+        el.draggable = true;
+        el.dataset.id = action.id;
+
+        let primaryInputHtml = '';
+        let extraHtml = '';
+
+        if (action.type === 'click') {
+            primaryInputHtml = `
+                <div class="selector-group inline-group" style="flex: 1;">
+                    <input type="text" class="selector-input compact-input" placeholder="CSS Selector" value="${action.selector || ''}" style="width: 100%;">
+                    <button class="crosshair-btn" title="Pick Element">⌖</button>
+                </div>
+            `;
+        } else if (action.type === 'each') {
+            primaryInputHtml = `
+                <div class="selector-group inline-group" style="flex: 1;">
+                    <input type="text" class="selector-input compact-input" placeholder="Container Selector" value="${action.selector || ''}" style="width: 100%;">
+                    <button class="crosshair-btn" title="Pick Element">⌖</button>
+                    <button class="global-switch-btn ${action.isGlobal ? 'active' : ''}" title="Toggle Global/Local">🌐</button>
+                </div>
+            `;
+            extraHtml = `
+                <div class="nested-actions-container"></div>
+                <button class="add-nested-action-btn add-action-btn" style="font-size: 11px; margin-left: 20px;">+ Add Nested Action</button>
+            `;
+        } else if (action.type === 'save') {
+            // Ensure columns array exists
+            if (!action.columns) action.columns = [];
+
+            primaryInputHtml = `
+                <input type="text" class="table-input compact-input" placeholder="Table Name" value="${action.tableName || ''}" style="flex: 1;">
+            `;
+            extraHtml = `
+                <div class="save-columns-list"></div>
+                <button class="add-save-col-btn">+ Add Column</button>
+            `;
+        }
+
+        el.innerHTML = `
+            <div class="action-header" style="display: flex; align-items: center; gap: 10px;">
+                <span class="action-handle">☰</span>
+                <select class="action-type-select compact-input" style="width: auto;">
+                    <option value="click" ${action.type === 'click' ? 'selected' : ''}>Click</option>
+                    <option value="each" ${action.type === 'each' ? 'selected' : ''}>For Each</option>
+                    <option value="save" ${action.type === 'save' ? 'selected' : ''}>Save to Table</option>
+                </select>
+                ${primaryInputHtml}
+                <button class="delete-action-btn" title="Delete Action">✕</button>
+            </div>
+            ${extraHtml}
+        `;
+
+        // Event Listeners
+        const crosshairBtn = el.querySelector('.crosshair-btn');
+        if (crosshairBtn) {
+            crosshairBtn.addEventListener('click', () => {
+                const input = el.querySelector('.selector-input');
+                startPicker(input);
+            });
+        }
+        el.querySelector('.action-type-select').addEventListener('change', (e) => {
+            action.type = e.target.value;
+            if (action.type === 'each' && !action.actions) action.actions = [];
+            savePlans();
+            renderUI();
+        });
+
+        el.querySelector('.delete-action-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = actions.indexOf(action);
+            if (idx > -1) actions.splice(idx, 1);
+            savePlans();
+            renderUI();
+        });
+
+        const selectorInput = el.querySelector('.selector-input');
+        if (selectorInput) {
+            selectorInput.addEventListener('input', (e) => {
+                action.selector = e.target.value;
+                savePlans();
+            });
+        }
+
+        const tableInput = el.querySelector('.table-input');
+        if (tableInput) {
+            tableInput.addEventListener('input', (e) => {
+                action.tableName = e.target.value;
+                savePlans();
+                renderSidebarTables();
+            });
+        }
+
+        if (action.type === 'save') {
+            const columnsContainer = el.querySelector('.save-columns-list');
+            renderSaveColumns(columnsContainer, action);
+
+            el.querySelector('.add-save-col-btn').addEventListener('click', () => {
+                action.columns.push({ name: '', selector: '', contentType: 'innerText' });
+                savePlans();
+                renderSaveColumns(columnsContainer, action);
+            });
+        }
+
+        if (action.type === 'each') {
+            const nestedContainer = el.querySelector('.nested-actions-container');
+            renderActionsList(nestedContainer, action.actions, block);
+
+            el.querySelector('.add-nested-action-btn').addEventListener('click', () => {
+                action.actions.push({ id: Date.now().toString(), type: 'click', selector: '' });
+                savePlans();
+                renderActionsList(nestedContainer, action.actions, block);
+            });
+
+            const globalBtn = el.querySelector('.global-switch-btn');
+            globalBtn.addEventListener('click', () => {
+                action.isGlobal = !action.isGlobal;
+                globalBtn.classList.toggle('active');
+                savePlans();
+            });
+        }
+
+        // Drag Events
+        el.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            draggingAction = action;
+            draggingSourceList = actions;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', action.id);
+            setTimeout(() => el.classList.add('dragging'), 0);
+        });
+
+        el.addEventListener('dragend', () => {
+            el.classList.remove('dragging');
+            draggingAction = null;
+            draggingSourceList = null;
+            document.querySelectorAll('.action-list, .nested-actions-container').forEach(l => l.classList.remove('drag-over'));
+        });
+
+        return el;
+    }
+
+    function renderSaveColumns(container, action) {
+        container.innerHTML = '';
+        action.columns.forEach((col, idx) => {
+            const row = document.createElement('div');
+            row.className = 'save-column-item';
+            row.innerHTML = `
+                <input type="text" class="col-name compact-input" placeholder="Col Name" value="${col.name || ''}" style="width: 80px;">
+                <div class="selector-group">
+                    <input type="text" class="selector-input compact-input" placeholder="Selector" value="${col.selector || ''}" style="flex:1;">
+                    <button class="crosshair-btn" title="Pick Element">⌖</button>
+                    <select class="content-type-select compact-input" style="width: auto;">
+                        <option value="innerText" ${col.contentType === 'innerText' ? 'selected' : ''}>Text</option>
+                        <option value="innerHTML" ${col.contentType === 'innerHTML' ? 'selected' : ''}>HTML</option>
+                    </select>
+                </div>
+                <button class="remove-col-btn">×</button>
+            `;
+
+            row.querySelector('.col-name').addEventListener('input', (e) => {
+                col.name = e.target.value;
+                savePlans();
+            });
+
+            row.querySelector('.selector-input').addEventListener('input', (e) => {
+                col.selector = e.target.value;
+                savePlans();
+            });
+
+            row.querySelector('.content-type-select').addEventListener('change', (e) => {
+                col.contentType = e.target.value;
+                savePlans();
+            });
+
+            row.querySelector('.crosshair-btn').addEventListener('click', () => {
+                startPicker(row.querySelector('.selector-input'));
+            });
+
+            row.querySelector('.remove-col-btn').addEventListener('click', () => {
+                action.columns.splice(idx, 1);
+                savePlans();
+                renderSaveColumns(container, action);
+            });
+
+            container.appendChild(row);
+        });
+    }
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.action-item:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
 
 });
