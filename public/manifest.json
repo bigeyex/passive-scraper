@@ -5,7 +5,6 @@
     "description": "Passively scrape data from web requests using DevTools.",
     "permissions": [
         "storage",
-        "scripting",
         "activeTab"
     ],
     "devtools_page": "devtools.html"
