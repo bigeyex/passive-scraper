@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, Play, Plus, Loader2 } from 'lucide-react';
-import ActionItem from './ActionItem';
+import ActionList from './ActionList';
 import { runActions } from '../executor/runner';
 
 export default function ActionBlock({ block, onChange, onDelete }) {
@@ -30,14 +30,7 @@ export default function ActionBlock({ block, onChange, onDelete }) {
         onChange({ ...block, actions: newActions });
     };
 
-    const updateAction = (index, newAction) => {
-        const newActions = [...block.actions];
-        newActions[index] = newAction;
-        onChange({ ...block, actions: newActions });
-    };
-
-    const deleteAction = (index) => {
-        const newActions = block.actions.filter((_, i) => i !== index);
+    const handleListChange = (newActions) => {
         onChange({ ...block, actions: newActions });
     };
 
@@ -50,8 +43,8 @@ export default function ActionBlock({ block, onChange, onDelete }) {
                         onClick={handleRun}
                         disabled={isRunning}
                         className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors ${isRunning
-                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                : 'bg-green-600 hover:bg-green-500 text-white'
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-500 text-white'
                             }`}
                         title="Run Actions"
                     >
@@ -68,15 +61,12 @@ export default function ActionBlock({ block, onChange, onDelete }) {
                 </div>
             </div>
 
-            <div className="space-y-2 mb-4">
-                {block.actions?.map((action, index) => (
-                    <ActionItem
-                        key={action.id || index}
-                        action={action}
-                        onChange={(newVal) => updateAction(index, newVal)}
-                        onDelete={() => deleteAction(index)}
-                    />
-                ))}
+            <div className="mb-4">
+                <ActionList
+                    actions={block.actions || []}
+                    onChange={handleListChange}
+                />
+
                 {(!block.actions || block.actions.length === 0) && (
                     <div className="text-sm text-slate-600 italic py-2 text-center border border-dashed border-slate-800 rounded">
                         No actions defined
