@@ -41,13 +41,30 @@ export default function ActionItem({ action, onChange, onDelete }) {
                 </select>
 
                 {action.type === 'click' && (
-                    <input
-                        type="text"
-                        value={action.selector || ''}
-                        onChange={e => updateAction('selector', e.target.value)}
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                        placeholder="CSS Selector"
-                    />
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                className="selector-input w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500 pr-8"
+                                placeholder="CSS Selector"
+                                value={action.selector || ''}
+                                onChange={e => updateAction('selector', e.target.value)}
+                            />
+                            <button className="crosshair-btn absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 hover:text-blue-400" title="Pick Element">⌖</button>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+                            <span>after</span>
+                            <input
+                                type="number"
+                                className="delay-input w-12 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-center text-slate-200 focus:outline-none focus:border-blue-500"
+                                value={action.delay || 0}
+                                min="0"
+                                step="0.5"
+                                onChange={e => updateAction('delay', parseFloat(e.target.value))}
+                            />
+                            <span>seconds</span>
+                        </div>
+                    </div>
                 )}
 
                 {action.type === 'each' && (

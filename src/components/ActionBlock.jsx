@@ -1,8 +1,25 @@
-import React from 'react';
-import { Trash2, Play, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Play, Plus, Loader2 } from 'lucide-react';
 import ActionItem from './ActionItem';
+import { runActions } from '../executor/runner';
 
 export default function ActionBlock({ block, onChange, onDelete }) {
+    const [isRunning, setIsRunning] = useState(false);
+
+    const handleRun = async () => {
+        setIsRunning(true);
+        try {
+            await runActions(block.actions, (type, msg) => {
+                console.log(`[${type}] ${msg}`);
+                // Ideally this would go to the App logger, but simple console for now
+                // or we can dispatch a custom event
+            });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsRunning(false);
+        }
+    };
 
     const addAction = () => {
         const newActions = [...(block.actions || []), {
@@ -30,11 +47,16 @@ export default function ActionBlock({ block, onChange, onDelete }) {
                 <h3 className="font-semibold text-slate-300">Action Sequence</h3>
                 <div className="flex items-center gap-2">
                     <button
-                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-xs transition-colors cursor-not-allowed opacity-50"
-                        title="Execution script removed in this version"
-                        disabled
+                        onClick={handleRun}
+                        disabled={isRunning}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors ${isRunning
+                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-500 text-white'
+                            }`}
+                        title="Run Actions"
                     >
-                        <Play className="w-3 h-3" /> Run
+                        {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                        {isRunning ? 'Running...' : 'Run'}
                     </button>
                     <button
                         onClick={onDelete}
