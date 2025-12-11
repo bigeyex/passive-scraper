@@ -1,15 +1,45 @@
 import React from 'react';
 import { X, GripVertical, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import ActionList from './ActionList';
 
-// Helper to avoid circular dependency in imports if any, but since ActionList imports ActionItem, 
-// we need to be careful. In this case, we might need to pass the component type or ensure 
-// lazy loading if circular issues arise. However, ES modules usually handle this. 
-// If ActionList is the default export and we import it here, it should be fine.
-// Wait, React components can be recursive if they are defined in the same file or imported.
-// Since they are separate files, let's just use it.
+// Droppable zone for for-each blocks
+function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: `droppable-${actionId}`,
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={`pl-6 border-l-2 ml-2 transition-colors ${isOver
+                    ? 'border-blue-500 bg-blue-900/10'
+                    : 'border-slate-700'
+                }`}
+        >
+            <div className="mt-2">
+                <ActionList
+                    actions={actions}
+                    onChange={onChange}
+                    depth={depth + 1}
+                />
+            </div>
+            {actions.length === 0 && (
+                <div className="text-xs text-slate-600 italic py-2 text-center border border-dashed border-slate-800 rounded my-2">
+                    Drop actions here or add new
+                </div>
+            )}
+            <button
+                onClick={onAddNested}
+                className="mt-2 text-xs text-blue-400 flex items-center gap-1 hover:text-blue-300"
+            >
+                <Plus className="w-3 h-3" /> Add Nested Action
+            </button>
+        </div>
+    );
+}
 
 export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
     const {
@@ -101,8 +131,8 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                                 <button
                                     onClick={() => updateAction('isGlobal', !action.isGlobal)}
                                     className={`px-2 py-1 rounded text-xs border whitespace-nowrap transition-colors ${action.isGlobal
-                                            ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
-                                            : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
+                                        ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
+                                        : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
                                         }`}
                                     title="Toggle Global/Local scope"
                                 >
@@ -197,8 +227,8 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                                     <button
                                         onClick={() => updateColumn(idx, 'isGlobal', !col.isGlobal)}
                                         className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${col.isGlobal
-                                                ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
-                                                : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
+                                            ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
+                                            : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
                                             }`}
                                         title="Toggle Global Select"
                                     >
@@ -225,21 +255,13 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
 
             {/* Nested Actions for For Each */}
             {action.type === 'each' && (
-                <div className="pl-6 border-l-2 border-slate-700 ml-2">
-                    <div className="mt-2">
-                        <ActionList
-                            actions={action.actions || []}
-                            onChange={handleNestedChange}
-                            depth={depth + 1}
-                        />
-                    </div>
-                    <button
-                        onClick={addNestedAction}
-                        className="mt-2 text-xs text-blue-400 flex items-center gap-1 hover:text-blue-300"
-                    >
-                        <Plus className="w-3 h-3" /> Add Nested Action
-                    </button>
-                </div>
+                <ForEachDropZone
+                    actionId={action.id}
+                    actions={action.actions || []}
+                    onChange={handleNestedChange}
+                    onAddNested={addNestedAction}
+                    depth={depth}
+                />
             )}
         </div>
     );
