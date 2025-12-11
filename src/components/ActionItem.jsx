@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import ActionList from './ActionList';
+import SelectorInput from './SelectorInput';
 
 // Droppable zone for for-each blocks
 function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
@@ -15,8 +16,8 @@ function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
         <div
             ref={setNodeRef}
             className={`pl-6 border-l-2 ml-2 transition-colors ${isOver
-                    ? 'border-blue-500 bg-blue-900/10'
-                    : 'border-slate-700'
+                ? 'border-blue-500 bg-blue-900/10'
+                : 'border-slate-700'
                 }`}
         >
             <div className="mt-2">
@@ -118,29 +119,15 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
 
                 {action.type === 'click' && (
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="relative flex-1 flex gap-2">
-                            <input
-                                type="text"
-                                className="selector-input flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500 pr-8"
-                                placeholder="CSS Selector"
-                                value={action.selector || ''}
-                                onChange={e => updateAction('selector', e.target.value)}
-                            />
-                            {/* Global Toggle for Nested Actions */}
-                            {depth > 0 && (
-                                <button
-                                    onClick={() => updateAction('isGlobal', !action.isGlobal)}
-                                    className={`px-2 py-1 rounded text-xs border whitespace-nowrap transition-colors ${action.isGlobal
-                                        ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
-                                        : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
-                                        }`}
-                                    title="Toggle Global/Local scope"
-                                >
-                                    Global
-                                </button>
-                            )}
-                            <button className="crosshair-btn absolute right-[calc(var(--offset,0px)+4px)] top-1/2 -translate-y-1/2 text-slate-500 hover:text-blue-400 hidden" title="Pick Element">⌖</button>
-                        </div>
+                        <SelectorInput
+                            value={action.selector}
+                            onChange={(val) => updateAction('selector', val)}
+                            placeholder="CSS Selector"
+                            isGlobal={action.isGlobal}
+                            onGlobalChange={(val) => updateAction('isGlobal', val)}
+                            showGlobalToggle={depth > 0}
+                            className="flex-1"
+                        />
                         <div className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
                             <span>after</span>
                             <input
@@ -157,32 +144,15 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                 )}
 
                 {action.type === 'each' && (
-                    <div className="flex-1 flex gap-2">
-                        <input
-                            type="text"
-                            value={action.selector || ''}
-                            onChange={e => updateAction('selector', e.target.value)}
-                            className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                            placeholder="Container Selector"
-                        />
-                        {/* 'for-each' usually implies a local context for children, but the selector itself is relative to parent?
-                            Usually 'each' selector is relative to previous context. 
-                            If depth > 0, it might be relevant to have global toggle for the 'each' loop itself too.
-                            However, user specifically mentioned toggle for "selector in click action and columns of save-to-table".
-                            But also said "similar to that in for-each <selector> input". 
-                            So for-each already has it or needs it? 
-                            "add 'global' toggle similar to that in for-each <selector> input". 
-                            This implies 'each' ALREADY HAS IT?
-                            Looking at previous code: yes, it had it.
-                         */}
-                        <button
-                            onClick={() => updateAction('isGlobal', !action.isGlobal)}
-                            className={`px-2 py-1 rounded text-xs border ${action.isGlobal ? 'bg-blue-900 border-blue-700 text-blue-300' : 'bg-slate-900 border-slate-700 text-slate-500'}`}
-                            title="Toggle Global/Local scope"
-                        >
-                            Global
-                        </button>
-                    </div>
+                    <SelectorInput
+                        value={action.selector}
+                        onChange={(val) => updateAction('selector', val)}
+                        placeholder="Container Selector"
+                        isGlobal={action.isGlobal}
+                        onGlobalChange={(val) => updateAction('isGlobal', val)}
+                        showGlobalToggle={depth > 0}
+                        className="flex-1"
+                    />
                 )}
 
                 {action.type === 'save' && (
@@ -215,27 +185,15 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                                 placeholder="Col Name"
                                 className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
                             />
-                            <div className="flex-1 flex gap-1">
-                                <input
-                                    type="text"
-                                    value={col.selector}
-                                    onChange={e => updateColumn(idx, 'selector', e.target.value)}
-                                    placeholder="Selector (relative)"
-                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                                />
-                                {depth > 0 && (
-                                    <button
-                                        onClick={() => updateColumn(idx, 'isGlobal', !col.isGlobal)}
-                                        className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${col.isGlobal
-                                            ? 'bg-blue-900/50 border-blue-700 text-blue-300 hover:bg-blue-900'
-                                            : 'bg-slate-900 border-slate-700 text-slate-500 hover:bg-slate-800'
-                                            }`}
-                                        title="Toggle Global Select"
-                                    >
-                                        Global
-                                    </button>
-                                )}
-                            </div>
+                            <SelectorInput
+                                value={col.selector}
+                                onChange={(val) => updateColumn(idx, 'selector', val)}
+                                placeholder="Selector (relative)"
+                                isGlobal={col.isGlobal}
+                                onGlobalChange={(val) => updateColumn(idx, 'isGlobal', val)}
+                                showGlobalToggle={depth > 0}
+                                className="flex-1"
+                            />
                             <button
                                 onClick={() => removeColumn(idx)}
                                 className="text-slate-500 hover:text-red-400"
