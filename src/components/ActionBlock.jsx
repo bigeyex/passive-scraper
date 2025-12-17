@@ -21,7 +21,7 @@ import ActionItem from './ActionItem';
 import { runActions } from '../executor/runner';
 import { flattenTree, moveItemInTree, findAncestors } from '../utils/treeUtils';
 
-export default function ActionBlock({ block, onChange, onDelete }) {
+export default function ActionBlock({ block, onChange, onDelete, onLog }) {
     const [isRunning, setIsRunning] = useState(false);
     const [activeId, setActiveId] = useState(null);
 
@@ -36,9 +36,11 @@ export default function ActionBlock({ block, onChange, onDelete }) {
         setIsRunning(true);
         try {
             await runActions(block.actions, (type, msg) => {
-                console.log(`[${type}] ${msg}`);
+                // console.log(`[${type}] ${msg}`);
+                if (onLog) onLog(type, msg);
             });
         } catch (e) {
+            if (onLog) onLog('error', e.toString());
             console.error(e);
         } finally {
             setIsRunning(false);
@@ -195,6 +197,7 @@ export default function ActionBlock({ block, onChange, onDelete }) {
                         <ActionList
                             actions={block.actions || []}
                             onChange={handleListChange}
+                            parentSelector={null}
                         />
 
                         {(!block.actions || block.actions.length === 0) && (

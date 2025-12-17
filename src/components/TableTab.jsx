@@ -3,7 +3,7 @@ import { storage } from '../utils/storage';
 import { exportToCSV } from '../utils/csv';
 import { Download, Trash2, RefreshCw } from 'lucide-react';
 
-export default function TableTab({ tableName, plan }) {
+export default function TableTab({ tableName, plan, onUpdate, onClear }) {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -20,18 +20,32 @@ export default function TableTab({ tableName, plan }) {
     }, [tableName]);
 
     const handleClear = async () => {
-        if (confirm(`Are you sure you want to clear all data for ${tableName}?`)) {
-            await storage.remove(`data_${tableName}`);
-            loadData();
+        await storage.remove(`data_${tableName}`);
+        await loadData();
+        if (onClear) {
+            onClear();
+        } else if (onUpdate) {
+            onUpdate();
         }
     };
 
+    // Determine columns
+    let columns = [];
+    if (plan && plan.columns) {
+        columns = plan.columns;
+    } else if (data.length > 0) {
+        // Infer columns from data keys (excluding internal keys)
+        columns = Object.keys(data[0])
+            .filter(k => k !== '_timestamp')
+            .map(k => ({ name: k }));
+    }
+
     const handleExport = () => {
-        exportToCSV(tableName, data, plan.columns);
+        exportToCSV(tableName, data, columns);
     };
 
-    if (!plan) {
-        return <div className="text-slate-500">No plan found for this table.</div>;
+    if (!plan && columns.length === 0 && !loading) {
+        return <div className="text-slate-500 italic p-4">Table is empty or not found.</div>;
     }
 
     return (
@@ -63,7 +77,7 @@ export default function TableTab({ tableName, plan }) {
                         className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-red-500/20 hover:text-red-400 text-slate-300 rounded text-sm transition-colors"
                         disabled={data.length === 0}
                     >
-                        <Trash2 className="w-4 h-4" /> Clear Data
+                        <Trash2 className="w-4 h-4" /> Delete Table
                     </button>
                 </div>
             </div>
@@ -72,7 +86,7 @@ export default function TableTab({ tableName, plan }) {
                 <table className="w-full text-left text-sm text-slate-300">
                     <thead className="bg-slate-950 text-slate-400 font-medium uppercase text-xs sticky top-0 z-10 shadow-sm">
                         <tr>
-                            {plan.columns.map((col, i) => (
+                            {columns.map((col, i) => (
                                 <th key={i} className="px-4 py-3 border-b border-slate-700 whitespace-nowrap min-w-[150px]">
                                     {col.name}
                                 </th>
@@ -82,7 +96,7 @@ export default function TableTab({ tableName, plan }) {
                     <tbody className="divide-y divide-slate-800">
                         {data.map((row, i) => (
                             <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                                {plan.columns.map((col, j) => (
+                                {columns.map((col, j) => (
                                     <td key={j} className="px-4 py-2 border-r border-slate-800/50 last:border-r-0 truncate max-w-[300px]" title={row[col.name]}>
                                         {typeof row[col.name] === 'object' ? JSON.stringify(row[col.name]) : row[col.name]}
                                     </td>
@@ -91,7 +105,7 @@ export default function TableTab({ tableName, plan }) {
                         ))}
                         {data.length === 0 && !loading && (
                             <tr>
-                                <td colSpan={plan.columns.length} className="px-4 py-8 text-center text-slate-500 italic">
+                                <td colSpan={columns.length || 1} className="px-4 py-8 text-center text-slate-500 italic">
                                     No data captured yet.
                                 </td>
                             </tr>

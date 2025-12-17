@@ -7,7 +7,7 @@ import ActionList from './ActionList';
 import SelectorInput from './SelectorInput';
 
 // Droppable zone for for-each blocks
-function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
+function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth, parentSelector }) {
     const { setNodeRef, isOver } = useDroppable({
         id: `droppable-${actionId}`,
     });
@@ -25,6 +25,7 @@ function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
                     actions={actions}
                     onChange={onChange}
                     depth={depth + 1}
+                    parentSelector={parentSelector}
                 />
             </div>
             {actions.length === 0 && (
@@ -42,7 +43,7 @@ function ForEachDropZone({ actionId, actions, onChange, onAddNested, depth }) {
     );
 }
 
-export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
+export default function ActionItem({ action, onChange, onDelete, depth = 0, parentSelector = null }) {
     const {
         attributes,
         listeners,
@@ -127,6 +128,7 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                             onGlobalChange={(val) => updateAction('isGlobal', val)}
                             showGlobalToggle={depth > 0}
                             className="flex-1"
+                            parentSelector={parentSelector}
                         />
                         <div className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
                             <span>after</span>
@@ -152,8 +154,11 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                         onGlobalChange={(val) => updateAction('isGlobal', val)}
                         showGlobalToggle={depth > 0}
                         className="flex-1"
+                        parentSelector={parentSelector}
                     />
                 )}
+
+
 
                 {action.type === 'save' && (
                     <input
@@ -172,6 +177,29 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                     <X className="w-4 h-4" />
                 </button>
             </div>
+
+            {/* Nested Actions for For Each */}
+            {action.type === 'each' && (
+                /* Calculate nested selector for children elements */
+                /* If global, the new context is just the selector */
+                /* If local, it is parent + selector */
+                (() => {
+                    const nestedSelector = (action.isGlobal || !parentSelector)
+                        ? action.selector
+                        : `${parentSelector} ${action.selector}`;
+
+                    return (
+                        <ForEachDropZone
+                            actionId={action.id}
+                            actions={action.actions || []}
+                            onChange={handleNestedChange}
+                            onAddNested={addNestedAction}
+                            depth={depth}
+                            parentSelector={nestedSelector}
+                        />
+                    );
+                })()
+            )}
 
             {/* Expanded config for Save to Table */}
             {action.type === 'save' && (
@@ -193,6 +221,7 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                                 onGlobalChange={(val) => updateColumn(idx, 'isGlobal', val)}
                                 showGlobalToggle={depth > 0}
                                 className="flex-1"
+                                parentSelector={parentSelector}
                             />
                             <button
                                 onClick={() => removeColumn(idx)}
@@ -211,16 +240,7 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0 }) {
                 </div>
             )}
 
-            {/* Nested Actions for For Each */}
-            {action.type === 'each' && (
-                <ForEachDropZone
-                    actionId={action.id}
-                    actions={action.actions || []}
-                    onChange={handleNestedChange}
-                    onAddNested={addNestedAction}
-                    depth={depth}
-                />
-            )}
+            {/* Nested Actions for For Each handled above inline to share scope calculation */}
         </div>
     );
 }

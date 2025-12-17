@@ -1,8 +1,9 @@
 import React from 'react';
 import { Database, FileText, Play, Square, Table } from 'lucide-react';
 
-export default function Sidebar({ activeTab, onTabChange, plans }) {
-    const uniqueTables = [...new Set(plans.map(p => p.tableName))].filter(Boolean);
+export default function Sidebar({ activeTab, onTabChange, plans, tables = [] }) {
+    // Only show tables that actually exist in storage
+    const uniqueTables = tables;
 
     return (
         <div className="w-64 bg-slate-900 border-r border-slate-700 flex flex-col h-full text-slate-300">
@@ -20,8 +21,8 @@ export default function Sidebar({ activeTab, onTabChange, plans }) {
                 <button
                     onClick={() => onTabChange('plan')}
                     className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 mb-1 transition-colors ${activeTab === 'plan'
-                            ? 'bg-blue-600 text-white'
-                            : 'hover:bg-slate-800'
+                        ? 'bg-blue-600 text-white'
+                        : 'hover:bg-slate-800'
                         }`}
                 >
                     <FileText className="w-4 h-4" />
@@ -41,8 +42,8 @@ export default function Sidebar({ activeTab, onTabChange, plans }) {
                         key={tableName}
                         onClick={() => onTabChange(`table-${tableName}`)}
                         className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 mb-1 transition-colors ${activeTab === `table-${tableName}`
-                                ? 'bg-blue-600 text-white'
-                                : 'hover:bg-slate-800'
+                            ? 'bg-blue-600 text-white'
+                            : 'hover:bg-slate-800'
                             }`}
                     >
                         <Table className="w-4 h-4" />

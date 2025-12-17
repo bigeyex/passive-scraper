@@ -1,14 +1,19 @@
-export async function executeClick(action) {
-    const { selector, delay } = action;
+export async function executeClick(action, contextSelector = null) {
+    const { selector, delay, isGlobal } = action;
 
     if (delay && delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay * 1000));
     }
 
+    // Build actual selector based on global flag and context
+    const actualSelector = (isGlobal || !contextSelector)
+        ? selector
+        : `${contextSelector} ${selector}`;
+
     const expression = `
         (function() {
             try {
-                const el = document.querySelector("${selector}");
+                const el = document.querySelector("${actualSelector}");
                 if (el) {
                     el.click();
                     return { success: true };

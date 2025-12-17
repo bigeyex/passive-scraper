@@ -1,7 +1,7 @@
 import React from 'react';
 import ActionItem from './ActionItem';
 
-export default function ActionList({ actions, onChange, depth = 0 }) {
+export default function ActionList({ actions, onChange, depth = 0, parentSelector = null }) {
     const handleActionChange = (id, newAction) => {
         const newActions = actions.map(a => a.id === id ? newAction : a);
         onChange(newActions);
@@ -21,6 +21,7 @@ export default function ActionList({ actions, onChange, depth = 0 }) {
                     onChange={(newVal) => handleActionChange(action.id, newVal)}
                     onDelete={() => handleActionDelete(action.id)}
                     depth={depth}
+                    parentSelector={parentSelector}
                 />
             ))}
         </div>

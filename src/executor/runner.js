@@ -1,37 +1,62 @@
 import { executeClick } from './actions/click';
+import { executeForEach } from './actions/forEach';
+import { executeSaveToTable } from './actions/saveToTable';
 
-export async function runActions(actions, logCallback) {
+/**
+ * Run a list of actions with optional context selector for scoped execution
+ * @param {Array} actions - List of actions to execute
+ * @param {Function} logCallback - Callback for logging
+ * @param {string} contextSelector - Current context selector (for nested actions)
+ */
+export async function runActions(actions, logCallback, contextSelector = null) {
     if (!actions || actions.length === 0) return;
 
     for (const action of actions) {
-        // Skip log for 'each' container initiation if purely structural, or log it
-        if (logCallback) logCallback('info', `Executing ${action.type}...`);
-
         try {
             let result;
+
             if (action.type === 'click') {
-                result = await executeClick(action);
-            } else if (action.type === 'each') {
-                // Placeholder for real loop logic. 
-                // For now, we just execute children once to demonstrate recursion traversal
-                // In real app, we'd find elements matching selector, loop, and scope children
-                if (action.actions && action.actions.length > 0) {
-                    // TODO: Implement actual iteration over DOM elements
-                    if (logCallback) logCallback('info', `(Mock) Entering loop for ${action.selector}`);
-                    await runActions(action.actions, logCallback);
-                } else {
-                    if (logCallback) logCallback('warning', 'Empty for-each loop');
+                if (logCallback) logCallback('info', `clicking ${action.selector}`);
+                result = await executeClick(action, contextSelector);
+
+                if (result && result.error === 'Element not found') {
+                    if (logCallback) logCallback('error', `click: cannot find ${action.selector}`);
                 }
-                result = { success: true };
+
+            } else if (action.type === 'each') {
+                // Execute for-each with nested action runner
+                result = await executeForEach(
+                    action,
+                    async (nestedActions, newContext) => {
+                        await runActions(nestedActions, logCallback, newContext);
+                    },
+                    contextSelector
+                );
+
+                if (result.count !== undefined) {
+                    if (logCallback) logCallback('info', `looping ${result.count} elements in selector ${action.selector}`);
+                }
+
+            } else if (action.type === 'save') {
+                result = await executeSaveToTable(action, contextSelector);
+
+                if (result.row) {
+                    const fieldCount = Object.keys(result.row).filter(k => k !== '_timestamp').length;
+                    if (logCallback) logCallback('success', `saving ${fieldCount} field to table ${action.tableName}`);
+                }
+                if (result.warnings) {
+                    if (logCallback) logCallback('warning', `Warnings: ${result.warnings.join(', ')}`);
+                }
+
             } else {
                 if (logCallback) logCallback('warning', `Action type ${action.type} not yet supported`);
                 continue;
             }
 
-            if (result && result.error) {
+            if (result && result.error && result.error !== 'Element not found') { // Already handled click error specifically
                 if (logCallback) logCallback('error', `Failed: ${result.error}`);
-            } else {
-                if (logCallback) logCallback('success', `Executed ${action.type}`);
+            } else if (result && result.warning) {
+                if (logCallback) logCallback('warning', result.warning);
             }
         } catch (e) {
             if (logCallback) logCallback('error', `Execution exception: ${e.toString()}`);

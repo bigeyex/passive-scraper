@@ -9,6 +9,7 @@ import { Play, Pause, Terminal } from 'lucide-react';
 
 function App() {
   const [plans, setPlans] = useState([]);
+  const [tables, setTables] = useState([]); // Discovered tables
   const [isListening, setIsListening] = useState(false);
   const [activeTab, setActiveTab] = useState('plan');
   const [logs, setLogs] = useState([]);
@@ -33,9 +34,34 @@ function App() {
       if (data.plans) setPlans(data.plans);
       if (data.isListening) setIsListening(data.isListening);
       if (data.isLogOpen) setIsLogOpen(data.isLogOpen);
+      fetchTables();
     }
     loadState();
   }, []);
+
+  // Fetch tables from storage and clean up empty ones
+  const fetchTables = async () => {
+    const all = await storage.get(null);
+    const tableKeys = Object.keys(all || {}).filter(k => k.startsWith('data_'));
+
+    const validTables = [];
+    const emptyTables = [];
+
+    for (const key of tableKeys) {
+      if (!all[key] || all[key].length === 0) {
+        emptyTables.push(key);
+      } else {
+        validTables.push(key.replace('data_', ''));
+      }
+    }
+
+    // Cleanup empty tables
+    if (emptyTables.length > 0) {
+      await storage.remove(emptyTables);
+    }
+
+    setTables(validTables);
+  };
 
   // Save changes
   useEffect(() => {
@@ -58,6 +84,11 @@ function App() {
       time: new Date().toLocaleTimeString()
     };
     setLogs(prev => [newLog, ...prev]);
+
+    // Refresh tables if we saved data
+    if (type === 'success' && (message.includes('Saved') || message.includes('saved') || message.includes('to table'))) {
+      fetchTables();
+    }
   };
 
   const toggleListening = () => setIsListening(prev => !prev);
@@ -118,12 +149,18 @@ function App() {
     };
   }, []); // Only register once, use refs for state access
 
+  const handleTableClear = async () => {
+    await fetchTables();
+    setActiveTab('plan');
+  };
+
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         plans={plans}
+        tables={tables}
       />
 
       <div className="flex-1 flex flex-col relative min-w-0">
@@ -133,8 +170,8 @@ function App() {
             <button
               onClick={toggleListening}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-medium transition-colors ${isListening
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                 }`}
             >
               {isListening ? (
@@ -165,16 +202,18 @@ function App() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-auto bg-slate-950 relative">
+        <div className={`flex-1 overflow-auto bg-slate-950 relative transition-all duration-300 ${isLogOpen ? 'mr-80' : ''}`}>
           <div className="p-6 max-w-5xl mx-auto h-full">
             {activeTab === 'plan' && (
-              <PlanView plans={plans} setPlans={setPlans} />
+              <PlanView plans={plans} setPlans={setPlans} onLog={addLog} />
             )}
             {activeTab.startsWith('table-') && (
               <TableTab
                 key={activeTab} // Force re-mount on tab switch
                 tableName={activeTab.replace('table-', '')}
                 plan={plans.find(p => p.tableName === activeTab.replace('table-', ''))}
+                onUpdate={fetchTables}
+                onClear={handleTableClear}
               />
             )}
           </div>

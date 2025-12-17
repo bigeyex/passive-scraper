@@ -3,7 +3,7 @@ import RequestBlock from './RequestBlock';
 import ActionBlock from './ActionBlock';
 import { PlusCircle, Zap } from 'lucide-react';
 
-export default function PlanView({ plans, setPlans }) {
+export default function PlanView({ plans, setPlans, onLog }) {
 
     const updateBlock = (index, newBlock) => {
         const newPlans = [...plans];
@@ -66,6 +66,7 @@ export default function PlanView({ plans, setPlans }) {
                             block={block}
                             onChange={(val) => updateBlock(index, val)}
                             onDelete={() => deleteBlock(index)}
+                            onLog={onLog}
                         />
                     ) : (
                         <RequestBlock
