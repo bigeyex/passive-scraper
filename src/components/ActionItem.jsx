@@ -116,6 +116,7 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0, pare
                     <option value="click">Click</option>
                     <option value="each">For Each</option>
                     <option value="save">Save to Table</option>
+                    <option value="sendHtml">Send HTML</option>
                 </select>
 
                 {action.type === 'click' && (
@@ -132,6 +133,40 @@ export default function ActionItem({ action, onChange, onDelete, depth = 0, pare
                         />
                         <div className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
                             <span>after</span>
+                            <input
+                                type="number"
+                                className="delay-input w-12 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-center text-slate-200 focus:outline-none focus:border-blue-500"
+                                value={action.delay || 0}
+                                min="0"
+                                step="0.5"
+                                onChange={e => updateAction('delay', parseFloat(e.target.value))}
+                            />
+                            <span>s</span>
+                        </div>
+                    </div>
+                )}
+
+                {action.type === 'sendHtml' && (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <SelectorInput
+                            value={action.selector}
+                            onChange={(val) => updateAction('selector', val)}
+                            placeholder="Selector to Send"
+                            isGlobal={action.isGlobal}
+                            onGlobalChange={(val) => updateAction('isGlobal', val)}
+                            showGlobalToggle={depth > 0}
+                            className="flex-1"
+                            parentSelector={parentSelector}
+                        />
+                        <input
+                            type="text"
+                            value={action.label || ''}
+                            onChange={e => updateAction('label', e.target.value)}
+                            className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                            placeholder="Label"
+                        />
+                        <div className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+                            <span>wait</span>
                             <input
                                 type="number"
                                 className="delay-input w-12 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-center text-slate-200 focus:outline-none focus:border-blue-500"

@@ -1,14 +1,16 @@
 import { executeClick } from './actions/click';
 import { executeForEach } from './actions/forEach';
 import { executeSaveToTable } from './actions/saveToTable';
+import { executeSendHtml } from './actions/sendHtml';
 
 /**
  * Run a list of actions with optional context selector for scoped execution
  * @param {Array} actions - List of actions to execute
  * @param {Function} logCallback - Callback for logging
  * @param {string} contextSelector - Current context selector (for nested actions)
+ * @param {Function} sendHtmlCallback - Callback for sending HTML data
  */
-export async function runActions(actions, logCallback, contextSelector = null) {
+export async function runActions(actions, logCallback, contextSelector = null, sendHtmlCallback = null) {
     if (!actions || actions.length === 0) return;
 
     for (const action of actions) {
@@ -28,7 +30,7 @@ export async function runActions(actions, logCallback, contextSelector = null) {
                 result = await executeForEach(
                     action,
                     async (nestedActions, newContext) => {
-                        await runActions(nestedActions, logCallback, newContext);
+                        await runActions(nestedActions, logCallback, newContext, sendHtmlCallback);
                     },
                     contextSelector
                 );
@@ -47,6 +49,10 @@ export async function runActions(actions, logCallback, contextSelector = null) {
                 if (result.warnings) {
                     if (logCallback) logCallback('warning', `Warnings: ${result.warnings.join(', ')}`);
                 }
+
+            } else if (action.type === 'sendHtml') {
+                if (logCallback) logCallback('info', `sending HTML of ${action.selector} as "${action.label}"`);
+                result = await executeSendHtml(action, contextSelector, sendHtmlCallback);
 
             } else {
                 if (logCallback) logCallback('warning', `Action type ${action.type} not yet supported`);
