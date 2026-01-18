@@ -92,56 +92,80 @@ function App() {
         }
     };
 
+    const connectWebSocket = () => {
+        if (!isListeningRef.current) return;
+
+        addLog('info', 'Attempting to connect to Python script at ws://127.0.0.1:8687...');
+        const ws = new WebSocket('ws://127.0.0.1:8687');
+
+        ws.onopen = () => {
+            addLog('success', 'Connected to Python script');
+            wsRef.current = ws;
+
+            const heartbeatInterval = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'heartbeat' }));
+                }
+            }, 10000); // 10s heartbeat
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'eval' && msg.script) {
+                        const requestId = msg.id;
+                        if (chrome && chrome.devtools && chrome.devtools.inspectedWindow) {
+                            chrome.devtools.inspectedWindow.eval(msg.script, (result, exceptionInfo) => {
+                                if (exceptionInfo) {
+                                    ws.send(JSON.stringify({ type: 'eval_result', id: requestId, error: exceptionInfo.description }));
+                                } else {
+                                    ws.send(JSON.stringify({ type: 'eval_result', id: requestId, result: result === undefined ? null : result }));
+                                }
+                            });
+                        } else {
+                            ws.send(JSON.stringify({ type: 'eval_result', id: requestId, error: 'DevTools environment not available' }));
+                        }
+                    }
+                } catch (e) {
+                    console.error('WebSocket message error:', e);
+                }
+            };
+
+            ws.onerror = (error) => {
+                // Error handled in onclose or generically
+            };
+
+            ws.onclose = () => {
+                clearInterval(heartbeatInterval);
+                wsRef.current = null;
+                addLog('info', 'WebSocket disconnected');
+
+                // Auto-reconnect if still listening
+                if (isListeningRef.current) {
+                    addLog('info', 'Attempting auto-reconnect in 2 seconds...');
+                    setTimeout(connectWebSocket, 2000);
+                }
+            };
+        };
+
+        ws.onerror = (error) => {
+            if (!wsRef.current) { // Only log if we weren't already connected
+                addLog('error', 'WebSocket Connection Error. Ensure the Python script is running.');
+            }
+        };
+    };
+
     const toggleListening = () => {
         setIsListening(prev => {
             const nextState = !prev;
 
             if (nextState) {
                 // Turning ON: Connect to WebSocket
-                try {
-                    addLog('info', 'Attempting to connect to Python script at ws://127.0.0.1:8687...');
-                    const ws = new WebSocket('ws://127.0.0.1:8687');
-
-                    ws.onopen = () => {
-                        addLog('success', 'Connected to Python script');
-                    };
-
-                    ws.onmessage = (event) => {
-                        try {
-                            const msg = JSON.parse(event.data);
-                            if (msg.type === 'eval' && msg.script) {
-                                // Execute script in inspected window
-                                if (chrome && chrome.devtools && chrome.devtools.inspectedWindow) {
-                                    chrome.devtools.inspectedWindow.eval(msg.script, (result, exceptionInfo) => {
-                                        if (exceptionInfo) {
-                                            ws.send(JSON.stringify({ type: 'eval_result', error: exceptionInfo.description }));
-                                        } else {
-                                            ws.send(JSON.stringify({ type: 'eval_result', result: result }));
-                                        }
-                                    });
-                                } else {
-                                    ws.send(JSON.stringify({ type: 'eval_result', error: 'DevTools environment not available' }));
-                                }
-                            }
-                        } catch (e) {
-                            console.error('WebSocket message error:', e);
-                        }
-                    };
-
-                    ws.onerror = (error) => {
-                        addLog('error', 'WebSocket Error. Ensure the Python script is running.');
-                    };
-
-                    ws.onclose = () => {
-                        addLog('info', 'WebSocket disconnected');
-                    };
-
-                    wsRef.current = ws;
-                } catch (e) {
-                    addLog('error', `Connection failed: ${e.message}`);
-                }
+                // We use a timeout to let state update first or just use nextState
+                isListeningRef.current = true;
+                connectWebSocket();
             } else {
                 // Turning OFF: Close WebSocket
+                isListeningRef.current = false;
                 if (wsRef.current) {
                     wsRef.current.close();
                     wsRef.current = null;

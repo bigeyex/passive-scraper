@@ -1,9 +1,5 @@
 import sys
 import os
-
-# Add the current directory to sys.path so we can import PSServer
-sys.path.append(os.path.join(os.getcwd(), 'python'))
-
 import PSServer
 import time
 

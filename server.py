@@ -57,7 +57,7 @@ async def input_loop():
             print("No client connected.")
 
 async def main():
-    server = await websockets.serve(handler, "127.0.0.1", 8687)
+    server = await websockets.serve(handler, "127.0.0.1", 8687, max_size=104857600)
     print("WebSocket server started on ws://127.0.0.1:8687")
     
     # Run server and input loop concurrently
